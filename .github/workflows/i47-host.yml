@@ -1,6 +1,16 @@
 name: Byrne I.47 C+Lua host qualification
 
 on:
+  push:
+    branches:
+      - book1-proposition47-draft
+    paths:
+      - '.github/workflows/i47-host.yml'
+      - 'code/i47_*'
+      - 'code/proposition47.*'
+      - 'lua/book1_prop47.lua'
+      - 'tests/i47_*'
+      - 'third_party/lua'
   pull_request:
     paths:
       - '.github/workflows/i47-host.yml'
