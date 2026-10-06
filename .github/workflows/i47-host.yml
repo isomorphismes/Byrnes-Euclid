@@ -32,6 +32,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
 
       - name: Verify pinned Lua
         shell: bash
@@ -45,16 +46,46 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/byrne-i47-host
-          cc -std=c11 -O2 -DMAKE_LIB -I third_party/lua             -c third_party/lua/onelua.c -o /tmp/byrne-i47-host/lua-host.o
-          cc -std=c11 -O2 -Wall -Wextra -Werror -pedantic             -I code -I third_party/lua             code/proposition47.c code/i47_lua_bridge.c code/i47_applet.c             tests/i47_test.c /tmp/byrne-i47-host/lua-host.o -lm             -o /tmp/byrne-i47-host/i47-test
-          /tmp/byrne-i47-host/i47-test lua/book1_prop47.lua             | tee /tmp/byrne-i47-host/i47-tests.txt
+          cc -std=c11 -O2 -DMAKE_LIB -I third_party/lua -c third_party/lua/onelua.c -o /tmp/byrne-i47-host/lua-host.o
+          cc -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I code -I third_party/lua code/proposition47.c code/i47_lua_bridge.c code/i47_applet.c tests/i47_test.c /tmp/byrne-i47-host/lua-host.o -lm -o /tmp/byrne-i47-host/i47-test
+          /tmp/byrne-i47-host/i47-test lua/book1_prop47.lua | tee /tmp/byrne-i47-host/i47-tests.txt
 
-      - name: Generate Lua-driven preview
+      - name: Generate pixel-stable Lua-driven preview
         shell: bash
         run: |
           set -euo pipefail
-          cc -std=c11 -O2 -Wall -Wextra -Werror -pedantic             -I code -I third_party/lua             code/proposition47.c code/i47_lua_bridge.c code/i47_applet.c             code/i47_render.c tests/i47_render_preview.c             /tmp/byrne-i47-host/lua-host.o -lm             -o /tmp/byrne-i47-host/i47-render-preview
-          /tmp/byrne-i47-host/i47-render-preview             lua/book1_prop47.lua /tmp/byrne-i47-host/i47-preview.ppm
+          cc -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I code -I third_party/lua code/proposition47.c code/i47_lua_bridge.c code/i47_applet.c code/i47_render.c tests/i47_render_preview.c /tmp/byrne-i47-host/lua-host.o -lm -o /tmp/byrne-i47-host/i47-render-preview
+          /tmp/byrne-i47-host/i47-render-preview lua/book1_prop47.lua /tmp/byrne-i47-host/i47-preview.ppm
+          echo 'f69501f0d817f1c2258c77261f7ef05d2b6dc69260a942b18c68848b1d75f187  /tmp/byrne-i47-host/i47-preview.ppm' | sha256sum -c -
+
+      - name: Compare C67-size renderer with pre-optimization head
+        shell: bash
+        run: |
+          set -euo pipefail
+          baseline=c45be39066a77d2ba7f56326f76bafd02faf8c70
+          rm -rf /tmp/byrne-i47-baseline
+          git worktree add --detach /tmp/byrne-i47-baseline "$baseline"
+          cc -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I code -I third_party/lua code/proposition47.c code/i47_lua_bridge.c code/i47_applet.c code/i47_render.c tests/i47_render_benchmark.c /tmp/byrne-i47-host/lua-host.o -lm -o /tmp/byrne-i47-host/current-benchmark
+          cc -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I /tmp/byrne-i47-baseline/code -I "$GITHUB_WORKSPACE/third_party/lua" /tmp/byrne-i47-baseline/code/proposition47.c /tmp/byrne-i47-baseline/code/i47_lua_bridge.c /tmp/byrne-i47-baseline/code/i47_applet.c /tmp/byrne-i47-baseline/code/i47_render.c "$GITHUB_WORKSPACE/tests/i47_render_benchmark.c" /tmp/byrne-i47-host/lua-host.o -lm -o /tmp/byrne-i47-host/baseline-benchmark
+          b1=$(/tmp/byrne-i47-host/baseline-benchmark /tmp/byrne-i47-baseline/lua/book1_prop47.lua)
+          c1=$(/tmp/byrne-i47-host/current-benchmark lua/book1_prop47.lua)
+          c2=$(/tmp/byrne-i47-host/current-benchmark lua/book1_prop47.lua)
+          b2=$(/tmp/byrne-i47-host/baseline-benchmark /tmp/byrne-i47-baseline/lua/book1_prop47.lua)
+          printf '%s\n%s\n%s\n%s\n' "$b1" "$c1" "$c2" "$b2" | tee /tmp/byrne-i47-host/i47-render-benchmark.txt
+          python3 - "$b1" "$c1" "$c2" "$b2" <<'PY'
+          import re, sys
+          def ms(line):
+              match = re.search(r"milliseconds=([0-9.]+)", line)
+              if not match:
+                  raise SystemExit("missing benchmark milliseconds")
+              return float(match.group(1))
+          baseline = min(ms(sys.argv[1]), ms(sys.argv[4]))
+          current = min(ms(sys.argv[2]), ms(sys.argv[3]))
+          speedup = baseline / current
+          print(f"best baseline={baseline:.3f} ms current={current:.3f} ms speedup={speedup:.2f}x")
+          if current >= baseline * 0.90:
+              raise SystemExit("renderer optimization did not clear the 10% improvement gate")
+          PY
 
       - uses: actions/upload-artifact@v4
         with:
@@ -62,6 +93,7 @@ jobs:
           path: |
             /tmp/byrne-i47-host/i47-tests.txt
             /tmp/byrne-i47-host/i47-preview.ppm
+            /tmp/byrne-i47-host/i47-render-benchmark.txt
 
   android-producer:
     if: github.event_name != 'pull_request'
@@ -82,13 +114,13 @@ jobs:
           license_status=${PIPESTATUS[1]}
           set -o pipefail
           test "$license_status" -eq 0
-          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"             "ndk;29.0.14206865"             "build-tools;36.0.0"             "platforms;android-34-ext12"
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.14206865" "build-tools;36.0.0" "platforms;android-34-ext12"
 
       - name: Build YSH 0.38.0
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --location --retry 3             https://oils.pub/download/oils-for-unix-0.38.0.tar.gz             --output /tmp/oils-for-unix-0.38.0.tar.gz
+          curl --fail --location --retry 3 https://oils.pub/download/oils-for-unix-0.38.0.tar.gz --output /tmp/oils-for-unix-0.38.0.tar.gz
           tar -xzf /tmp/oils-for-unix-0.38.0.tar.gz -C /tmp
           cd /tmp/oils-for-unix-0.38.0
           ./configure --prefix /tmp/oils-prefix
@@ -103,7 +135,7 @@ jobs:
           test -z "$(git status --porcelain --untracked-files=normal)"
           rm -rf /tmp/byrne-i47-android
           mkdir -p /tmp/byrne-i47-android
-          /tmp/oils-prefix/bin/ysh android/i47/build.grease             "$GITHUB_WORKSPACE"             "$ANDROID_SDK_ROOT/ndk/29.0.14206865"             "$ANDROID_SDK_ROOT/build-tools/36.0.0"             "$ANDROID_SDK_ROOT/platforms/android-34-ext12/android.jar"             /tmp/byrne-i47-android             /usr/bin/cc
+          /tmp/oils-prefix/bin/ysh android/i47/build.grease "$GITHUB_WORKSPACE" "$ANDROID_SDK_ROOT/ndk/29.0.14206865" "$ANDROID_SDK_ROOT/build-tools/36.0.0" "$ANDROID_SDK_ROOT/platforms/android-34-ext12/android.jar" /tmp/byrne-i47-android /usr/bin/cc
 
       - uses: actions/upload-artifact@v4
         with:

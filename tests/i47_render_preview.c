@@ -2,6 +2,7 @@
 #include "i47_applet.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static char *read_file(const char *path,size_t *length) {
     FILE *file=fopen(path,"rb"); if (!file) return NULL;
@@ -19,13 +20,29 @@ int main(int argc,char **argv) {
     free(lua_source);
     i47_applet_size(&a,576,1152,160);
     if (!i47_applet_restore(&a,a.blue_length,a.yellow_length,true)) { i47_applet_close(&a); return 1; }
-    uint32_t *pixels=calloc(576*1152,sizeof *pixels); if (!pixels) { i47_applet_close(&a); return 1; }
+
+    size_t count=(size_t)576*1152;
+    uint32_t *pixels=calloc(count,sizeof *pixels);
+    uint32_t *second=calloc(count,sizeof *second);
+    if (!pixels||!second) { free(pixels); free(second); i47_applet_close(&a); return 1; }
+
     i47_applet_render(&a,pixels,576);
-    FILE *file=fopen(argv[2],"wb"); if (!file) { free(pixels); i47_applet_close(&a); return 1; }
-    fprintf(file,"P6\n576 1152\n255\n");
-    for (int i=0;i<576*1152;++i) {
-        unsigned char rgb[3]={(unsigned char)pixels[i],(unsigned char)(pixels[i]>>8),(unsigned char)(pixels[i]>>16)};
-        if (fwrite(rgb,1,3,file)!=3) { fclose(file); free(pixels); i47_applet_close(&a); return 1; }
+    if (a.static_rebuilds!=1) { free(pixels); free(second); i47_applet_close(&a); return 1; }
+
+    /* A same-size redraw must reuse the page cache and remain bit-identical. */
+    i47_applet_size(&a,576,1152,160);
+    i47_applet_render(&a,second,576);
+    if (a.static_rebuilds!=1||memcmp(pixels,second,count*sizeof *pixels)!=0) {
+        free(pixels); free(second); i47_applet_close(&a); return 1;
     }
-    int result=fclose(file); free(pixels); i47_applet_close(&a); return result!=0;
+
+    FILE *file=fopen(argv[2],"wb"); if (!file) { free(pixels); free(second); i47_applet_close(&a); return 1; }
+    fprintf(file,"P6\n576 1152\n255\n");
+    for (size_t i=0;i<count;++i) {
+        unsigned char rgb[3]={(unsigned char)pixels[i],(unsigned char)(pixels[i]>>8),(unsigned char)(pixels[i]>>16)};
+        if (fwrite(rgb,1,3,file)!=3) { fclose(file); free(pixels); free(second); i47_applet_close(&a); return 1; }
+    }
+    int result=fclose(file);
+    free(pixels); free(second); i47_applet_close(&a);
+    return result!=0;
 }

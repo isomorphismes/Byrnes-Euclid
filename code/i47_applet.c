@@ -3,7 +3,15 @@
 #include "touch_contract.h"
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
+static void discard_static_page(I47Applet *applet) {
+    free(applet->static_pixels);
+    applet->static_pixels=NULL;
+    applet->static_width=0;
+    applet->static_height=0;
+}
 
 static void remember_runtime_error(I47Applet *applet,const char *context) {
     const char *detail=applet->lua?i47_lua_last_error(applet->lua):"";
@@ -30,6 +38,7 @@ static bool refresh_presentation(I47Applet *applet) {
         remember_runtime_error(applet,"Lua presentation failed");
         return false;
     }
+    discard_static_page(applet);
     return true;
 }
 
@@ -63,6 +72,7 @@ bool i47_applet_init(I47Applet *applet,const char *lua_source,size_t lua_length)
 
 void i47_applet_close(I47Applet *applet) {
     if (!applet) return;
+    discard_static_page(applet);
     i47_lua_destroy(applet->lua);
     applet->lua=NULL;
     applet->runtime_ok=false;
@@ -82,9 +92,10 @@ bool i47_applet_restore(I47Applet *applet,double blue_length,double yellow_lengt
 
 void i47_applet_size(I47Applet *applet,int width,int height,int density) {
     if (!applet) return;
+    bool changed=width!=applet->width||height!=applet->height||density!=applet->density;
     applet->width=width; applet->height=height; applet->density=density;
     i47_applet_cancel(applet);
-    if (width>0&&height>0&&applet->lua) (void)refresh_presentation(applet);
+    if (changed&&width>0&&height>0&&applet->lua) (void)refresh_presentation(applet);
 }
 
 void i47_applet_cancel(I47Applet *applet) {

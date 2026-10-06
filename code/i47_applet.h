@@ -19,6 +19,14 @@ typedef struct {
     double down_x,down_y;
     bool moved,debug,blocked,runtime_ok;
     unsigned drag_updates;
+
+    /* Compact width×height copy of the static Byrne page. It deliberately
+       excludes state-dependent text; every ANativeWindow buffer still gets a
+       complete row-wise copy before dynamic geometry is drawn. */
+    uint32_t *static_pixels;
+    int static_width,static_height;
+    unsigned static_rebuilds;
+
     char error[192];
 } I47Applet;
 
@@ -31,7 +39,7 @@ I47AppletRect i47_applet_checks_bounds(const I47Applet *applet);
 void i47_applet_down(I47Applet *applet,int pointer_id,double x,double y);
 void i47_applet_move(I47Applet *applet,int pointer_id,double x,double y);
 void i47_applet_cancel(I47Applet *applet);
-void i47_applet_render(const I47Applet *applet,uint32_t *pixels,int stride);
+void i47_applet_render(I47Applet *applet,uint32_t *pixels,int stride);
 const char *i47_applet_error(const I47Applet *applet);
 
 #endif
