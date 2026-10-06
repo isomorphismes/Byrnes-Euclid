@@ -64,6 +64,7 @@ jobs:
             /tmp/byrne-i47-host/i47-preview.ppm
 
   android-producer:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -74,7 +75,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          set +o pipefail
           yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          license_status=${PIPESTATUS[1]}
+          set -o pipefail
+          test "$license_status" -eq 0
           "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"             "ndk;29.0.14206865"             "build-tools;36.0.0"             "platforms;android-34-ext12"
 
       - name: Build YSH 0.38.0
