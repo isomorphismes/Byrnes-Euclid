@@ -1,4 +1,4 @@
-name: Byrne I.47 C+Lua host qualification
+name: Byrne I.47 C+Lua qualification
 
 on:
   push:
@@ -6,6 +6,8 @@ on:
       - book1-proposition47-draft
     paths:
       - '.github/workflows/i47-host.yml'
+      - 'android/i47/**'
+      - 'android/signing/**'
       - 'code/i47_*'
       - 'code/proposition47.*'
       - 'lua/book1_prop47.lua'
@@ -14,6 +16,8 @@ on:
   pull_request:
     paths:
       - '.github/workflows/i47-host.yml'
+      - 'android/i47/**'
+      - 'android/signing/**'
       - 'code/i47_*'
       - 'code/proposition47.*'
       - 'lua/book1_prop47.lua'
@@ -40,21 +44,61 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p out
-          cc -std=c11 -O2 -DMAKE_LIB -I third_party/lua             -c third_party/lua/onelua.c -o out/lua-host.o
-          cc -std=c11 -O2 -Wall -Wextra -Werror -pedantic             -I code -I third_party/lua             code/proposition47.c code/i47_lua_bridge.c code/i47_applet.c             tests/i47_test.c out/lua-host.o -lm -o out/i47-test
-          ./out/i47-test lua/book1_prop47.lua | tee out/i47-tests.txt
+          mkdir -p /tmp/byrne-i47-host
+          cc -std=c11 -O2 -DMAKE_LIB -I third_party/lua             -c third_party/lua/onelua.c -o /tmp/byrne-i47-host/lua-host.o
+          cc -std=c11 -O2 -Wall -Wextra -Werror -pedantic             -I code -I third_party/lua             code/proposition47.c code/i47_lua_bridge.c code/i47_applet.c             tests/i47_test.c /tmp/byrne-i47-host/lua-host.o -lm             -o /tmp/byrne-i47-host/i47-test
+          /tmp/byrne-i47-host/i47-test lua/book1_prop47.lua             | tee /tmp/byrne-i47-host/i47-tests.txt
 
       - name: Generate Lua-driven preview
         shell: bash
         run: |
           set -euo pipefail
-          cc -std=c11 -O2 -Wall -Wextra -Werror -pedantic             -I code -I third_party/lua             code/proposition47.c code/i47_lua_bridge.c code/i47_applet.c             code/i47_render.c tests/i47_render_preview.c out/lua-host.o             -lm -o out/i47-render-preview
-          ./out/i47-render-preview lua/book1_prop47.lua out/i47-preview.ppm
+          cc -std=c11 -O2 -Wall -Wextra -Werror -pedantic             -I code -I third_party/lua             code/proposition47.c code/i47_lua_bridge.c code/i47_applet.c             code/i47_render.c tests/i47_render_preview.c             /tmp/byrne-i47-host/lua-host.o -lm             -o /tmp/byrne-i47-host/i47-render-preview
+          /tmp/byrne-i47-host/i47-render-preview             lua/book1_prop47.lua /tmp/byrne-i47-host/i47-preview.ppm
 
       - uses: actions/upload-artifact@v4
         with:
           name: byrne-i47-host-evidence
           path: |
-            out/i47-tests.txt
-            out/i47-preview.ppm
+            /tmp/byrne-i47-host/i47-tests.txt
+            /tmp/byrne-i47-host/i47-preview.ppm
+
+  android-producer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install exact Android inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"             "ndk;29.0.14206865"             "build-tools;36.0.0"             "platforms;android-34-ext12"
+
+      - name: Build YSH 0.38.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3             https://oils.pub/download/oils-for-unix-0.38.0.tar.gz             --output /tmp/oils-for-unix-0.38.0.tar.gz
+          tar -xzf /tmp/oils-for-unix-0.38.0.tar.gz -C /tmp
+          cd /tmp/oils-for-unix-0.38.0
+          ./configure --prefix /tmp/oils-prefix
+          _build/oils.sh
+          ./install
+          /tmp/oils-prefix/bin/ysh -c 'echo YSH_OK'
+
+      - name: Run registered I.47 Android producer
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain --untracked-files=normal)"
+          rm -rf /tmp/byrne-i47-android
+          mkdir -p /tmp/byrne-i47-android
+          /tmp/oils-prefix/bin/ysh android/i47/build.grease             "$GITHUB_WORKSPACE"             "$ANDROID_SDK_ROOT/ndk/29.0.14206865"             "$ANDROID_SDK_ROOT/build-tools/36.0.0"             "$ANDROID_SDK_ROOT/platforms/android-34-ext12/android.jar"             /tmp/byrne-i47-android             /usr/bin/cc
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: byrne-i47-android-producer
+          path: /tmp/byrne-i47-android/
