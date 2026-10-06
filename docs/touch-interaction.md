@@ -1,6 +1,13 @@
 # Touch interaction sketch
 
-The first target is Euclid I.11: construct a perpendicular at a chosen point on a straight line.
+The implemented first target is Euclid III.1: find the centre of a given circle.
+The earlier I.11 examples below remain reusable interaction design material.
+For III.1, the red chord endpoints are constrained inputs; all midpoint,
+perpendicular, diameter, and centre objects are dependent. The fixed initial
+view implements capture, density-aware hit testing, movement threshold,
+angle-offset dragging without acquisition jumps, and cancel handling. Empty
+space does not pan, and adding a second finger cancels capture until release.
+Pan/pinch remain later view features rather than changing dependent geometry.
 
 The touch layer should feel like moving a diagram, not operating a CAD program. The geometry engine owns exact constraints. Touch owns approximate selection and human movement intent.
 

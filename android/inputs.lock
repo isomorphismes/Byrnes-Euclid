@@ -1,0 +1,15 @@
+ndk_revision=29.0.14206865
+build_tools_revision=36.0.0
+sdk_platform=34
+sdk_extension=12
+sdk_platform_revision=1
+abi=armeabi-v7a
+min_sdk=21
+target_sdk=34
+android_ndk_reference=d4a4719fb97e8031476bf822697dce8423bc9030
+byrne_source_reference=10744dfafb1eceea3023df12e2b5d9744d324c42
+geogebra_reference=4873cd881d12dd11736826e4c5c5ede162a33deb
+grease_repository=f19c94c6df18cddbdc1e81463e5bd689533e3c13
+grease_source=6d29702a10ea9eb72a43950554dbcd4174d07a89
+lua_gitlink=6e22fedb74cf0c9b6656e9fce8b7331db847c605
+lua_compiled=false

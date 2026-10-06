@@ -4,6 +4,12 @@ Touch-first, draggable applets and small Android packages for individual proposi
 
 Current Android target: Book III, Proposition 1 — find the centre of a given circle.
 
+The C implementation, live constrained chord interaction, paper/Byrne renderer,
+numerical acceptance tests and DEX-free ARMv7 package build are in place.
+See [native build and acceptance](android/README.md). Drag the red endpoints;
+the yellow centre ring is obtained by bisecting the black constructed diameter.
+Tap the bottom instruction to toggle numerical checks.
+
 ## Implementation contract
 
 - Android runtime/application code is C, not C++.

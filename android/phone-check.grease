@@ -1,0 +1,23 @@
+#!/usr/bin/env ysh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Optional runtime-only probe. Use an already verified MIRO A1 Grease entrypoint.
+if (len(ARGV) !== 1) { echo 'usage: ysh phone-check.grease ABSOLUTE_RISH'; exit 2 }
+var rish = $[ARGV[0]]
+if (not rish.startsWith('/')) { echo 'FAIL explicit absolute rish path required'; exit 2 }
+if ! test -x "$rish" { echo 'FAIL rish entrypoint unavailable'; exit 2 }
+printf '\033[36mMIRO A1 identity / installed Byrne III.1\033[0m\n'
+var model = $("$rish" -c 'getprop ro.product.model' | tr -d '\r')
+var android = $("$rish" -c 'getprop ro.build.version.release' | tr -d '\r')
+var abi = $("$rish" -c 'getprop ro.product.cpu.abilist' | tr -d '\r')
+echo "model=$model android=$android abi=$abi"
+if (model !== 'A1' and model !== 'MIRO A1') { printf '\033[31mFAIL wrong device\033[0m\n'; exit 2 }
+if (android !== '14') { printf '\033[31mFAIL wrong Android release\033[0m\n'; exit 2 }
+if ! printf '%s\n' "$abi" | tr ',' '\n' | rg -q '^armeabi-v7a$' {
+  printf '\033[31mFAIL ABI mismatch\033[0m\n'; exit 2
+}
+"$rish" -c 'cmd package path org.isomorphismes.byrne.euclid.iii1'
+printf '\033[33mLaunch installed package; then drag both red endpoints\033[0m\n'
+"$rish" -c 'am start -W -n org.isomorphismes.byrne.euclid.iii1/android.app.NativeActivity'
+"$rish" -c 'pidof org.isomorphismes.byrne.euclid.iii1'
+printf '\033[32mPASS launch command; visual acceptance remains manual\033[0m\n'
+echo 'Check fixed yellow centre, square angle, intersections on circle, increasing UPDATES.'
