@@ -1,0 +1,2 @@
+PASS 1446 fixed/generated chords; 720 drag positions; tolerance=1e-09 radius; worst drift=2.99642274068523e-12 radius
+PASS midpoint, perpendicular, secant/tangent/miss, boundary, equal radii, degeneracy, pointer capture
