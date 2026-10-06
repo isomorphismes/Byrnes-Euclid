@@ -67,10 +67,10 @@ jobs:
           git worktree add --detach /tmp/byrne-i47-baseline "$baseline"
           cc -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I code -I third_party/lua code/proposition47.c code/i47_lua_bridge.c code/i47_applet.c code/i47_render.c tests/i47_render_benchmark.c /tmp/byrne-i47-host/lua-host.o -lm -o /tmp/byrne-i47-host/current-benchmark
           cc -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I /tmp/byrne-i47-baseline/code -I "$GITHUB_WORKSPACE/third_party/lua" /tmp/byrne-i47-baseline/code/proposition47.c /tmp/byrne-i47-baseline/code/i47_lua_bridge.c /tmp/byrne-i47-baseline/code/i47_applet.c /tmp/byrne-i47-baseline/code/i47_render.c "$GITHUB_WORKSPACE/tests/i47_render_benchmark.c" /tmp/byrne-i47-host/lua-host.o -lm -o /tmp/byrne-i47-host/baseline-benchmark
-          b1=$(/tmp/byrne-i47-host/baseline-benchmark /tmp/byrne-i47-baseline/lua/book1_prop47.lua)
-          c1=$(/tmp/byrne-i47-host/current-benchmark lua/book1_prop47.lua)
-          c2=$(/tmp/byrne-i47-host/current-benchmark lua/book1_prop47.lua)
-          b2=$(/tmp/byrne-i47-host/baseline-benchmark /tmp/byrne-i47-baseline/lua/book1_prop47.lua)
+          b1=$(/tmp/byrne-i47-host/baseline-benchmark "$GITHUB_WORKSPACE/lua/book1_prop47.lua")
+          c1=$(/tmp/byrne-i47-host/current-benchmark "$GITHUB_WORKSPACE/lua/book1_prop47.lua")
+          c2=$(/tmp/byrne-i47-host/current-benchmark "$GITHUB_WORKSPACE/lua/book1_prop47.lua")
+          b2=$(/tmp/byrne-i47-host/baseline-benchmark "$GITHUB_WORKSPACE/lua/book1_prop47.lua")
           printf '%s\n%s\n%s\n%s\n' "$b1" "$c1" "$c2" "$b2" | tee /tmp/byrne-i47-host/i47-render-benchmark.txt
           python3 - "$b1" "$c1" "$c2" "$b2" <<'PY'
           import re, sys
