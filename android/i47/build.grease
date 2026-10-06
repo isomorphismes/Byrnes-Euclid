@@ -1,7 +1,7 @@
 #!/usr/bin/env ysh
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Dedicated Byrne I.47 producer. Uses the same pinned Android inputs and stable
-# public development signer as the accepted III.1 path; no Gradle fallback.
+# Dedicated Byrne I.47 producer. Uses pinned Android inputs, the pinned Lua
+# submodule, and the stable public development signer; no Gradle fallback.
 if (len(ARGV) !== 6) {
   echo 'usage: ysh build.grease REPO NDK BUILD_TOOLS ANDROID_JAR OUTPUT HOST_CC'
   exit 2
@@ -17,12 +17,25 @@ for location in ([repository, ndk, tools, android_jar, output, host_cc]) {
 }
 var dirty = $(git -C "$repository" status --porcelain --untracked-files=normal)
 if (dirty !== '') { echo 'FAIL commit source before producing an acceptance artifact'; exit 2 }
+
 var compiler = "$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang"
 var llvm = "$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
 var key = "$repository/android/signing/development.p12"
-for required in ([compiler, "$llvm/llvm-strip", "$llvm/llvm-readelf", "$tools/aapt2", "$tools/aapt", "$tools/zipalign", "$tools/apksigner", android_jar, key, host_cc]) {
+var lua = "$repository/third_party/lua"
+var lua_script = "$repository/lua/book1_prop47.lua"
+for required in ([compiler, "$llvm/llvm-strip", "$llvm/llvm-readelf", "$tools/aapt2", "$tools/aapt",
+                  "$tools/zipalign", "$tools/apksigner", android_jar, key, host_cc,
+                  "$lua/onelua.c", "$lua/lua.h", "$lua/lauxlib.h", "$lua/lualib.h", lua_script]) {
   if ! test -f "$required" { echo "FAIL missing input: $required"; exit 2 }
 }
+
+var lua_head = $(git -C "$lua" rev-parse HEAD)
+if (lua_head !== '6e22fedb74cf0c9b6656e9fce8b7331db847c605') {
+  echo "FAIL Lua submodule commit: $lua_head"; exit 2
+}
+var lua_dirty = $(git -C "$lua" status --porcelain --untracked-files=normal)
+if (lua_dirty !== '') { echo 'FAIL Lua submodule must be clean'; exit 2 }
+
 rg -q '^Pkg.Revision = 29.0.14206865$' "$ndk/source.properties"
 rg -q '^Pkg.Revision=36.0.0$' "$tools/source.properties"
 var platform = $(dirname "$android_jar")
@@ -33,6 +46,7 @@ var key_digest = $(sha256sum "$key" | cut -d ' ' -f 1)
 if (key_digest !== 'd83f7a36a205e49b4c755f37d27a0ded02779acc0da82a22e19d458dc6e5a89a') {
   echo 'FAIL stable public development key digest'; exit 2
 }
+
 mkdir -p "$output"
 var work = $(mktemp -d "$output/work.XXXXXX")
 keytool -exportcert -keystore "$key" -storetype PKCS12 -storepass wegert-debug -alias wegert-debug -file "$work/certificate.der"
@@ -40,38 +54,51 @@ var certificate_digest = $(sha256sum "$work/certificate.der" | cut -d ' ' -f 1)
 if (certificate_digest !== 'de9b1d47c5a65e6d46a204b79dd9ee566b9d3c9832ba81ebc4213d3392e92ff9') {
   echo 'FAIL stable development certificate'; exit 2
 }
-printf '\033[36mBUILD Byrne I.47 / armeabi-v7a\033[0m\n'
-"$host_cc" -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I "$repository/code" \
-  "$repository/code/proposition47.c" "$repository/code/i47_applet.c" \
-  "$repository/tests/i47_test.c" -lm -o "$work/i47-test"
-"$work/i47-test" > "$output/i47-tests.txt"
+
+printf '\033[36mBUILD Byrne I.47 / C geometry + Lua proposition / armeabi-v7a\033[0m\n'
+
+# Third-party Lua is compiled separately; project-owned C remains under strict warnings.
+"$host_cc" -std=c11 -O2 -DMAKE_LIB -I "$lua" -c "$lua/onelua.c" -o "$work/lua-host.o"
+"$host_cc" -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I "$repository/code" -I "$lua" \
+  "$repository/code/proposition47.c" "$repository/code/i47_lua_bridge.c" "$repository/code/i47_applet.c" \
+  "$repository/tests/i47_test.c" "$work/lua-host.o" -lm -o "$work/i47-test"
+"$work/i47-test" "$lua_script" > "$output/i47-tests.txt"
 cat "$output/i47-tests.txt"
-"$host_cc" -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I "$repository/code" \
-  "$repository/code/proposition47.c" "$repository/code/i47_applet.c" "$repository/code/i47_render.c" \
-  "$repository/tests/i47_render_preview.c" -lm -o "$work/i47-render-preview"
-"$work/i47-render-preview" "$output/i47-preview.ppm"
+
+"$host_cc" -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I "$repository/code" -I "$lua" \
+  "$repository/code/proposition47.c" "$repository/code/i47_lua_bridge.c" "$repository/code/i47_applet.c" \
+  "$repository/code/i47_render.c" "$repository/tests/i47_render_preview.c" "$work/lua-host.o" \
+  -lm -o "$work/i47-render-preview"
+"$work/i47-render-preview" "$lua_script" "$output/i47-preview.ppm"
+
 mkdir -p "$work/payload/lib/armeabi-v7a"
+"$compiler" -std=c11 -O2 -fPIC -marm -DMAKE_LIB -I "$lua" \
+  -c "$lua/onelua.c" -o "$work/lua-android.o"
 "$compiler" -std=c11 -O2 -fPIC -marm -Wall -Wextra -Werror -Wno-unused-parameter \
   -I "$ndk/sources/android/native_app_glue" \
   -c "$ndk/sources/android/native_app_glue/android_native_app_glue.c" -o "$work/native_app_glue.o"
 "$compiler" -std=c11 -O2 -fPIC -shared -marm -Wall -Wextra -Werror \
-  -I "$repository/code" -I "$ndk/sources/android/native_app_glue" \
-  "$repository/code/proposition47.c" "$repository/code/i47_applet.c" "$repository/code/i47_render.c" \
-  "$repository/android/i47/native_main.c" "$work/native_app_glue.o" \
+  -I "$repository/code" -I "$lua" -I "$ndk/sources/android/native_app_glue" \
+  "$repository/code/proposition47.c" "$repository/code/i47_lua_bridge.c" "$repository/code/i47_applet.c" \
+  "$repository/code/i47_render.c" "$repository/android/i47/native_main.c" \
+  "$work/lua-android.o" "$work/native_app_glue.o" \
   -Wl,-u,ANativeActivity_onCreate -Wl,--no-undefined -Wl,-z,max-page-size=16384 \
   -Wl,--build-id=sha1 -Wl,-soname,libbyrne.so -landroid -llog -lm \
   -o "$work/payload/lib/armeabi-v7a/libbyrne.so"
+
 "$llvm/llvm-strip" --strip-unneeded "$work/payload/lib/armeabi-v7a/libbyrne.so"
 "$llvm/llvm-readelf" -h -d "$work/payload/lib/armeabi-v7a/libbyrne.so" > "$output/native-library.txt"
 rg -q 'Class:.*ELF32' "$output/native-library.txt"
 rg -q 'Machine:.*ARM' "$output/native-library.txt"
 if rg -q 'libc\+\+|libstdc\+\+' "$output/native-library.txt" { echo 'FAIL C++ runtime dependency'; exit 2 }
+
 "$tools/aapt2" link -I "$android_jar" --manifest "$repository/android/i47/AndroidManifest.xml" \
-  --min-sdk-version 21 --target-sdk-version 34 -o "$work/unsigned.apk"
+  -A "$repository/lua" --min-sdk-version 21 --target-sdk-version 34 -o "$work/unsigned.apk"
 touch -t 198001010000 "$work/payload/lib/armeabi-v7a/libbyrne.so"
 cd "$work/payload"
 zip -X -0 "$work/unsigned.apk" lib/armeabi-v7a/libbyrne.so
 "$tools/zipalign" -f -P 16 4 "$work/unsigned.apk" "$work/aligned.apk"
+
 var apk = "$output/byrne-euclid-i47-miro-a1.apk"
 "$tools/apksigner" sign --ks "$key" --ks-key-alias wegert-debug --ks-pass pass:wegert-debug \
   --key-pass pass:wegert-debug --v1-signing-enabled true --v2-signing-enabled true \
@@ -79,19 +106,24 @@ var apk = "$output/byrne-euclid-i47-miro-a1.apk"
 "$tools/apksigner" verify --verbose --print-certs "$apk" > "$output/signer.txt"
 rg -q "Signer #1 certificate SHA-256 digest: $certificate_digest" "$output/signer.txt"
 "$tools/zipalign" -c -P 16 4 "$apk"
+
 unzip -Z1 "$apk" > "$output/package-files.txt"
 rg -q '^lib/armeabi-v7a/libbyrne.so$' "$output/package-files.txt"
+rg -q '^assets/book1_prop47.lua$' "$output/package-files.txt"
 if rg -q '\.dex$|lib/arm64|lib/x86|\.java$|\.kt$' "$output/package-files.txt" { echo 'FAIL unexpected application layer or ABI'; exit 2 }
+
 "$tools/aapt" dump badging "$apk" > "$output/package-badging.txt"
 rg -q "package: name='org.isomorphismes.byrne.euclid.i47'" "$output/package-badging.txt"
 rg -q "launchable-activity: name='android.app.NativeActivity'" "$output/package-badging.txt"
 "$tools/aapt" dump xmltree "$apk" AndroidManifest.xml > "$output/package-manifest.txt"
 rg -q 'hasCode.*0x0' "$output/package-manifest.txt"
+
 var source = $(git -C "$repository" rev-parse HEAD)
 var apk_digest = $(sha256sum "$apk" | cut -d ' ' -f 1)
 var source_tree = $(git -C "$repository" rev-parse 'HEAD^{tree}')
 var compiler_digest = $(sha256sum "$llvm/clang" | cut -d ' ' -f 1)
 var jar_digest = $(sha256sum "$android_jar" | cut -d ' ' -f 1)
+var lua_digest = $(sha256sum "$lua_script" | cut -d ' ' -f 1)
 var host_identity = $(uname -sm)
 {
   echo "source_commit=$source"
@@ -109,10 +141,13 @@ var host_identity = $(uname -sm)
   echo 'target_sdk=34'
   echo "signer_certificate_sha256=$certificate_digest"
   echo "apk_sha256=$apk_digest"
-  echo 'lua_compiled=false'
-  echo 'lua_gitlink=6e22fedb74cf0c9b6656e9fce8b7331db847c605'
+  echo 'lua_compiled=true'
+  echo "lua_gitlink=$lua_head"
+  echo "lua_asset_sha256=$lua_digest"
+  echo 'lua_asset=assets/book1_prop47.lua'
   echo 'android_ndk_reference=d4a4719fb97e8031476bf822697dce8423bc9030'
   echo 'source_build=PASS'
+  echo 'lua_state_contract=PASS'
   echo 'pythagoras_geometry=PASS'
   echo 'package_structure=PASS'
   echo 'alignment=PASS'
@@ -121,5 +156,5 @@ var host_identity = $(uname -sm)
   echo 'physical_miro_a1=NOT_RUN'
 } > "$output/build-receipt.txt"
 sha256sum "$apk" > "$output/SHA256SUMS.txt"
-printf '\033[32mPASS I.47 geometry, native build, package, alignment, stable signer\033[0m\n'
+printf '\033[32mPASS I.47 Lua/C host tests, native build, package, alignment, stable signer\033[0m\n'
 echo "$apk"

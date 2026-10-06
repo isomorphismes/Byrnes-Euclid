@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "i47_applet.h"
+#include <android/asset_manager.h>
 #include <android/log.h>
 #include <android/input.h>
 #include <android/native_window.h>
@@ -7,8 +8,29 @@
 #include <stdlib.h>
 #include <string.h>
 #define LOG(...) __android_log_print(ANDROID_LOG_INFO,"ByrneI47",__VA_ARGS__)
+
 typedef struct { double blue_length,yellow_length; bool debug; } SavedState;
 typedef struct { I47Applet applet; bool ready,dirty,focused; } Engine;
+
+static bool init_from_lua_asset(struct android_app *app,I47Applet *applet) {
+    if (!app->activity||!app->activity->assetManager) return false;
+    AAsset *asset=AAssetManager_open(app->activity->assetManager,"book1_prop47.lua",AASSET_MODE_STREAMING);
+    if (!asset) return false;
+    off_t length=AAsset_getLength(asset);
+    if (length<=0) { AAsset_close(asset); return false; }
+    char *source=malloc((size_t)length);
+    if (!source) { AAsset_close(asset); return false; }
+    size_t offset=0;
+    while (offset<(size_t)length) {
+        int amount=AAsset_read(asset,source+offset,(size_t)length-offset);
+        if (amount<=0) { free(source); AAsset_close(asset); return false; }
+        offset+=(size_t)amount;
+    }
+    bool ok=i47_applet_init(applet,source,(size_t)length);
+    free(source); AAsset_close(asset);
+    return ok;
+}
+
 static void render(struct android_app *app) {
     Engine *engine=app->userData;
     if (!app->window||!engine->ready) return;
@@ -22,6 +44,7 @@ static void render(struct android_app *app) {
                      engine->applet.drag_updates,engine->applet.construction.area_error);
     engine->dirty=false;
 }
+
 static int32_t input(struct android_app *app,AInputEvent *event) {
     Engine *engine=app->userData; I47Applet *applet=&engine->applet;
     if (AInputEvent_getType(event)!=AINPUT_EVENT_TYPE_MOTION) return 0;
@@ -37,10 +60,12 @@ static int32_t input(struct android_app *app,AInputEvent *event) {
         unsigned before=applet->drag_updates;
         for (size_t index=0;index<AMotionEvent_getPointerCount(event);++index)
             i47_applet_move(applet,AMotionEvent_getPointerId(event,index),AMotionEvent_getX(event,index),AMotionEvent_getY(event,index));
-        if (applet->drag_updates!=before) LOG("leg drag blue=%.6f yellow=%.6f",applet->blue_length,applet->yellow_length);
+        if (applet->drag_updates!=before) LOG("Lua leg drag blue=%.6f yellow=%.6f",applet->blue_length,applet->yellow_length);
+        if (!applet->runtime_ok) LOG("Lua runtime failure: %s",i47_applet_error(applet));
     }
     engine->dirty=true; return 1;
 }
+
 static void command(struct android_app *app,int32_t command) {
     Engine *engine=app->userData;
     switch(command) {
@@ -64,15 +89,21 @@ static void command(struct android_app *app,int32_t command) {
         } break;
     }
 }
+
 void android_main(struct android_app *app) {
     Engine engine={0}; app->userData=&engine;
-    if (!i47_applet_init(&engine.applet)) { LOG("FAIL geometry initialization"); ANativeActivity_finish(app->activity); return; }
+    if (!init_from_lua_asset(app,&engine.applet)) {
+        LOG("FAIL I.47 Lua initialization: %s",i47_applet_error(&engine.applet));
+        ANativeActivity_finish(app->activity);
+        return;
+    }
     if (app->savedState&&app->savedStateSize==sizeof(SavedState)) {
         SavedState state; memcpy(&state,app->savedState,sizeof state);
-        (void)i47_applet_restore(&engine.applet,state.blue_length,state.yellow_length,state.debug);
+        if (!i47_applet_restore(&engine.applet,state.blue_length,state.yellow_length,state.debug))
+            LOG("saved Lua proposition state rejected");
     }
     app->onAppCmd=command; app->onInputEvent=input;
-    LOG("native entry; C software renderer; I.47");
+    LOG("native entry; C raster + Lua proposition; I.47");
     while (!app->destroyRequested) {
         int events; struct android_poll_source *source=NULL;
         int timeout=engine.ready&&engine.dirty?0:-1;
@@ -81,4 +112,5 @@ void android_main(struct android_app *app) {
         if (app->destroyRequested) break;
         if (engine.ready&&engine.dirty) render(app);
     }
+    i47_applet_close(&engine.applet);
 }

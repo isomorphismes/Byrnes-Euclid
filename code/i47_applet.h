@@ -1,24 +1,29 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #ifndef BYRNE_I47_APPLET_H
 #define BYRNE_I47_APPLET_H
-#include "proposition47.h"
+#include "i47_lua_bridge.h"
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 typedef struct { double left,top,right,bottom; } I47AppletRect;
 typedef struct {
+    I47LuaRuntime *lua;
+    I47Presentation presentation;
     double blue_length;
     double yellow_length;
     double rotation;
     PythagorasConstruction construction;
     double maximum_area_error;
     int width,height,density,captured,pointer_id;
-    double down_x,down_y,original_length;
-    bool moved,debug,blocked;
+    double down_x,down_y;
+    bool moved,debug,blocked,runtime_ok;
     unsigned drag_updates;
+    char error[192];
 } I47Applet;
 
-bool i47_applet_init(I47Applet *applet);
+bool i47_applet_init(I47Applet *applet,const char *lua_source,size_t lua_length);
+void i47_applet_close(I47Applet *applet);
 bool i47_applet_restore(I47Applet *applet,double blue_length,double yellow_length,bool debug);
 void i47_applet_size(I47Applet *applet,int width,int height,int density);
 Point i47_applet_to_screen(const I47Applet *applet,Point point);
@@ -27,5 +32,6 @@ void i47_applet_down(I47Applet *applet,int pointer_id,double x,double y);
 void i47_applet_move(I47Applet *applet,int pointer_id,double x,double y);
 void i47_applet_cancel(I47Applet *applet);
 void i47_applet_render(const I47Applet *applet,uint32_t *pixels,int stride);
+const char *i47_applet_error(const I47Applet *applet);
 
 #endif

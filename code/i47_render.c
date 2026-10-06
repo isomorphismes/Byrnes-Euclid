@@ -7,6 +7,17 @@
 static const uint32_t PAPER=RGB(250,246,231),BLACK=RGB(0,0,0),
     RED=RGB(217,77,26),BLUE=RGB(38,89,153),YELLOW=RGB(242,179,26);
 typedef struct { uint32_t *pixels; int width,height,stride; } Canvas;
+
+static uint32_t palette(I47ColourRole role) {
+    switch(role) {
+    case I47_COLOUR_RED: return RED;
+    case I47_COLOUR_BLUE: return BLUE;
+    case I47_COLOUR_YELLOW: return YELLOW;
+    case I47_COLOUR_PAPER: return PAPER;
+    case I47_COLOUR_BLACK: default: return BLACK;
+    }
+}
+
 static void pixel(Canvas c,int x,int y,uint32_t colour,double coverage) {
     if (x<0||x>=c.width||y<0||y>=c.height||coverage<=0) return;
     coverage=fmin(1,coverage); uint32_t old=c.pixels[y*c.stride+x],mixed=0xff000000u;
@@ -84,52 +95,61 @@ static void outline_quad(Canvas c,const Point p[4],double width,uint32_t colour)
     for (int i=0;i<4;++i) stroke(c,p[i],p[(i+1)%4],width,colour,false);
 }
 void i47_applet_render(const I47Applet *a,uint32_t *pixels,int stride) {
-    if (!pixels||a->width<=0||a->height<=0||stride<a->width) return;
+    if (!pixels||!a->runtime_ok||a->width<=0||a->height<=0||stride<a->width) return;
     Canvas c={pixels,a->width,a->height,stride};
     for (int y=0;y<c.height;++y) for (int x=0;x<c.width;++x) pixels[y*stride+x]=PAPER;
+    const I47Presentation *view=&a->presentation;
     double unit=c.width/576.0,line=fmax(2,4*unit);
     int font=(int)fmax(1,floor(c.width/250.0)),title=(int)fmax(1,floor(c.width/155.0));
-    centre_text(c,(int)(c.height*.04),font,"BYRNE / EUCLID",BLACK);
-    centre_text(c,(int)(c.height*.08),title,"BOOK I.47",BLACK);
-    centre_text(c,(int)(c.height*.135),font,"THE RIGHT-ANGLED TRIANGLE",BLACK);
+    centre_text(c,(int)view->brand_y,font,view->brand,BLACK);
+    centre_text(c,(int)view->title_y,title,view->title,BLACK);
+    centre_text(c,(int)view->subtitle_y,font,view->subtitle,BLACK);
     I47AppletRect checks=i47_applet_checks_bounds(a);
     Point tl={checks.left,checks.top},tr={checks.right,checks.top},bl={checks.left,checks.bottom},br={checks.right,checks.bottom};
     stroke(c,tl,tr,1.5*unit,BLACK,false);stroke(c,tr,br,1.5*unit,BLACK,false);
     stroke(c,br,bl,1.5*unit,BLACK,false);stroke(c,bl,tl,1.5*unit,BLACK,false);
-    const char *caption=a->debug?"CHECKS ON":"CHECKS OFF";
+    const char *caption=a->debug?view->checks_on:view->checks_off;
     text(c,(int)((checks.left+checks.right-strlen(caption)*font*6)*.5),(int)((checks.top+checks.bottom-font*7)*.5),font,caption,BLACK);
 
     const PythagorasConstruction *p=&a->construction;
     if (p->status==GEOMETRY_OK) {
         Point red[4],blue[4],yellow[4];
         screen_square(a,&p->red_square,red);screen_square(a,&p->blue_square,blue);screen_square(a,&p->yellow_square,yellow);
-        fill_quad(c,red,RED); fill_quad(c,blue,BLUE); fill_quad(c,yellow,BLACK);
-        outline_quad(c,red,line*.55,BLACK); outline_quad(c,blue,line*.55,BLACK); outline_quad(c,yellow,line*.55,BLACK);
+        fill_quad(c,red,palette(view->hypotenuse_square_colour));
+        fill_quad(c,blue,palette(view->blue_square_colour));
+        fill_quad(c,yellow,palette(view->yellow_square_colour));
+        outline_quad(c,red,line*.55,palette(view->proof_colour));
+        outline_quad(c,blue,line*.55,palette(view->proof_colour));
+        outline_quad(c,yellow,line*.55,palette(view->proof_colour));
         Point right=i47_applet_to_screen(a,p->right_angle),be=i47_applet_to_screen(a,p->blue_end),ye=i47_applet_to_screen(a,p->yellow_end);
         fill_triangle(c,right,be,ye,PAPER);
-        stroke(c,right,be,line,BLUE,false); stroke(c,right,ye,line,YELLOW,false); stroke(c,be,ye,line,RED,false);
+        stroke(c,right,be,line,palette(view->blue_leg_colour),false);
+        stroke(c,right,ye,line,palette(view->yellow_leg_colour),false);
+        stroke(c,be,ye,line,palette(view->hypotenuse_colour),false);
         Point far_cut=i47_applet_to_screen(a,p->hypotenuse_far_cut);
-        stroke(c,right,far_cut,line*.65,BLACK,false);
-        stroke(c,right,red[3],line*.55,BLACK,false); stroke(c,right,red[2],line*.55,BLACK,false);
+        stroke(c,right,far_cut,line*.65,palette(view->proof_colour),false);
+        stroke(c,right,red[3],line*.55,palette(view->proof_colour),false);
+        stroke(c,right,red[2],line*.55,palette(view->proof_colour),false);
         double marker=14*unit;
         Point ub={(be.x-right.x)/hypot(be.x-right.x,be.y-right.y),(be.y-right.y)/hypot(be.x-right.x,be.y-right.y)};
         Point uy={(ye.x-right.x)/hypot(ye.x-right.x,ye.y-right.y),(ye.y-right.y)/hypot(ye.x-right.x,ye.y-right.y)};
         Point m1={right.x+ub.x*marker,right.y+ub.y*marker};
         Point m2={m1.x+uy.x*marker,m1.y+uy.y*marker};
         Point m3={right.x+uy.x*marker,right.y+uy.y*marker};
-        stroke(c,m1,m2,line*.55,BLACK,false);stroke(c,m2,m3,line*.55,BLACK,false);
-        disk(c,be,12*unit,PAPER);disk(c,be,8*unit,BLUE);
-        disk(c,ye,12*unit,PAPER);disk(c,ye,8*unit,YELLOW);
+        stroke(c,m1,m2,line*.55,palette(view->proof_colour),false);
+        stroke(c,m2,m3,line*.55,palette(view->proof_colour),false);
+        disk(c,be,12*unit,PAPER);disk(c,be,8*unit,palette(view->blue_leg_colour));
+        disk(c,ye,12*unit,PAPER);disk(c,ye,8*unit,palette(view->yellow_leg_colour));
     }
-    centre_text(c,(int)(c.height*.695),font,"DRAG THE BLUE OR YELLOW ENDPOINT",BLACK);
-    int left=(int)(c.width*.08),base=(int)(c.height*.745);
+    centre_text(c,(int)view->instruction_y,font,view->instruction,BLACK);
+    int left=(int)(c.width*.08),base=(int)view->legend_y;
     Point swatch[4]={{left,base},{left+26*unit,base},{left+26*unit,base+26*unit},{left,base+26*unit}};
-    fill_quad(c,swatch,RED);
-    text(c,left+(int)(42*unit),base,font,"RED SQUARE = THE TWO SIDE SQUARES",BLACK);
-    text(c,left+(int)(42*unit),base+font*11,font,"MOVE LEGS - AREA IDENTITY HOLDS",BLACK);
+    fill_quad(c,swatch,palette(view->hypotenuse_square_colour));
+    text(c,left+(int)(42*unit),base,font,view->equation,BLACK);
+    text(c,left+(int)(42*unit),base+font*11,font,view->motion,BLACK);
     if (a->debug) {
-        int top=(int)(c.height*.875); char message[100];
-        stroke(c,(Point){left,top-8*unit},(Point){c.width-left,top-8*unit},1,BLACK,false);
+        int top=(int)view->debug_y; char message[100];
+        stroke(c,(Point){left,top-8*unit},(Point){c.width-left,top-8*unit},1,palette(view->proof_colour),false);
         snprintf(message,sizeof message,"AREA %.1E  SQUARE %.1E",p->area_error,p->square_error); text(c,left,top,font,message,BLACK);
         snprintf(message,sizeof message,"RIGHT %.1E  MAX %.1E",p->right_angle_error,a->maximum_area_error); text(c,left,top+font*10,font,message,BLACK);
         snprintf(message,sizeof message,"LEGS %.3f %.3f  UPDATES %u",a->blue_length,a->yellow_length,a->drag_updates); text(c,left,top+font*20,font,message,BLACK);

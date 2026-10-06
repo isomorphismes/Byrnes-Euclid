@@ -2,60 +2,114 @@
 #include "i47_applet.h"
 #include "touch_contract.h"
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
-#define I47_MIN_LEG 0.35
-#define I47_MAX_LEG 1.35
+static void remember_runtime_error(I47Applet *applet,const char *context) {
+    const char *detail=applet->lua?i47_lua_last_error(applet->lua):"";
+    snprintf(applet->error,sizeof applet->error,"%s%s%s",context,
+             detail&&detail[0]?": ":"",detail&&detail[0]?detail:"");
+    applet->runtime_ok=false;
+}
 
-static double model_scale(const I47Applet *applet) {
-    double horizontal=applet->width*.90/4.35;
-    double vertical=applet->height*.48/4.35;
-    return fmin(horizontal,vertical);
-}
-static Point model_centre(void) { return (Point){.675,.675}; }
-static Point screen_centre(const I47Applet *applet) { return (Point){applet->width*.5,applet->height*.415}; }
-Point i47_applet_to_screen(const I47Applet *applet,Point point) {
-    Point mc=model_centre(),sc=screen_centre(applet); double s=model_scale(applet);
-    return (Point){sc.x+(point.x-mc.x)*s,sc.y-(point.y-mc.y)*s};
-}
-static Point from_screen(const I47Applet *applet,double x,double y) {
-    Point mc=model_centre(),sc=screen_centre(applet); double s=model_scale(applet);
-    return (Point){mc.x+(x-sc.x)/s,mc.y-(y-sc.y)/s};
-}
-static bool recompute(I47Applet *applet) {
-    if (construct_pythagoras((Point){0,0},applet->blue_length,applet->yellow_length,
-                             applet->rotation,&applet->construction)!=GEOMETRY_OK) return false;
-    applet->maximum_area_error=fmax(applet->maximum_area_error,applet->construction.area_error);
+static bool sync_from_lua(I47Applet *applet) {
+    if (!applet->lua) return false;
+    if (!i47_lua_sync(applet->lua,&applet->blue_length,&applet->yellow_length,
+                      &applet->rotation,&applet->debug,&applet->maximum_area_error,
+                      &applet->construction)) {
+        remember_runtime_error(applet,"Lua state sync failed");
+        return false;
+    }
+    applet->runtime_ok=true;
     return true;
 }
-static double clamp_leg(double length) { return fmax(I47_MIN_LEG,fmin(I47_MAX_LEG,length)); }
 
-bool i47_applet_init(I47Applet *applet) {
+static bool refresh_presentation(I47Applet *applet) {
+    if (applet->width<=0||applet->height<=0) return true;
+    if (!i47_lua_presentation(applet->lua,applet->width,applet->height,&applet->presentation)) {
+        remember_runtime_error(applet,"Lua presentation failed");
+        return false;
+    }
+    return true;
+}
+
+Point i47_applet_to_screen(const I47Applet *applet,Point point) {
+    const I47Presentation *p=&applet->presentation;
+    return (Point){
+        p->screen_centre_x+(point.x-p->model_centre_x)*p->scale,
+        p->screen_centre_y-(point.y-p->model_centre_y)*p->scale
+    };
+}
+
+static Point from_screen(const I47Applet *applet,double x,double y) {
+    const I47Presentation *p=&applet->presentation;
+    return (Point){
+        p->model_centre_x+(x-p->screen_centre_x)/p->scale,
+        p->model_centre_y-(y-p->screen_centre_y)/p->scale
+    };
+}
+
+bool i47_applet_init(I47Applet *applet,const char *lua_source,size_t lua_length) {
     if (!applet) return false;
     memset(applet,0,sizeof *applet);
-    applet->blue_length=1.10; applet->yellow_length=.74; applet->rotation=0;
     applet->captured=-1; applet->pointer_id=-1;
-    return recompute(applet);
+    if (!i47_lua_create(&applet->lua,lua_source,lua_length,applet->error,sizeof applet->error)) return false;
+    if (!sync_from_lua(applet)) {
+        i47_applet_close(applet);
+        return false;
+    }
+    return true;
 }
+
+void i47_applet_close(I47Applet *applet) {
+    if (!applet) return;
+    i47_lua_destroy(applet->lua);
+    applet->lua=NULL;
+    applet->runtime_ok=false;
+}
+
 bool i47_applet_restore(I47Applet *applet,double blue_length,double yellow_length,bool debug) {
-    if (!applet||!isfinite(blue_length)||!isfinite(yellow_length)||
-        blue_length<I47_MIN_LEG||blue_length>I47_MAX_LEG||
-        yellow_length<I47_MIN_LEG||yellow_length>I47_MAX_LEG) return false;
-    applet->blue_length=blue_length; applet->yellow_length=yellow_length; applet->debug=debug;
-    return recompute(applet);
+    if (!applet||!applet->lua) return false;
+    bool accepted=false;
+    if (!i47_lua_restore(applet->lua,blue_length,yellow_length,debug,&accepted)) {
+        remember_runtime_error(applet,"Lua restore failed");
+        return false;
+    }
+    if (!accepted) return false;
+    if (!sync_from_lua(applet)) return false;
+    return refresh_presentation(applet);
 }
+
 void i47_applet_size(I47Applet *applet,int width,int height,int density) {
-    applet->width=width; applet->height=height; applet->density=density; i47_applet_cancel(applet);
+    if (!applet) return;
+    applet->width=width; applet->height=height; applet->density=density;
+    i47_applet_cancel(applet);
+    if (width>0&&height>0&&applet->lua) (void)refresh_presentation(applet);
 }
-void i47_applet_cancel(I47Applet *applet) { applet->captured=-1; applet->pointer_id=-1; applet->moved=false; }
+
+void i47_applet_cancel(I47Applet *applet) {
+    if (!applet) return;
+    applet->captured=-1; applet->pointer_id=-1; applet->moved=false;
+}
+
 I47AppletRect i47_applet_checks_bounds(const I47Applet *applet) {
-    return (I47AppletRect){applet->width*.72,applet->height*.026,applet->width*.97,applet->height*.105};
+    const I47Presentation *p=&applet->presentation;
+    return (I47AppletRect){p->checks_left,p->checks_top,p->checks_right,p->checks_bottom};
 }
+
 void i47_applet_down(I47Applet *applet,int pointer_id,double x,double y) {
     i47_applet_cancel(applet);
-    if (applet->blocked||applet->width<=0||applet->height<=0) return;
+    if (!applet->runtime_ok||applet->blocked||applet->width<=0||applet->height<=0) return;
     I47AppletRect checks=i47_applet_checks_bounds(applet);
-    if (x>=checks.left&&x<=checks.right&&y>=checks.top&&y<=checks.bottom) { applet->debug=!applet->debug; return; }
+    if (x>=checks.left&&x<=checks.right&&y>=checks.top&&y<=checks.bottom) {
+        bool debug=false;
+        if (!i47_lua_toggle_checks(applet->lua,&debug)||!sync_from_lua(applet)) {
+            remember_runtime_error(applet,"Lua checks toggle failed");
+            return;
+        }
+        (void)debug;
+        return;
+    }
     Point handles[2]={i47_applet_to_screen(applet,applet->construction.blue_end),
                       i47_applet_to_screen(applet,applet->construction.yellow_end)};
     double best=fmax(touch_target_radius_pixels(applet->density),applet->width*.055);
@@ -65,22 +119,23 @@ void i47_applet_down(I47Applet *applet,int pointer_id,double x,double y) {
     }
     if (applet->captured<0) return;
     applet->pointer_id=pointer_id; applet->down_x=x; applet->down_y=y;
-    applet->original_length=applet->captured==0?applet->blue_length:applet->yellow_length;
 }
+
 void i47_applet_move(I47Applet *applet,int pointer_id,double x,double y) {
-    if (applet->blocked||applet->captured<0||pointer_id!=applet->pointer_id) return;
+    if (!applet->runtime_ok||applet->blocked||applet->captured<0||pointer_id!=applet->pointer_id) return;
     if (!applet->moved&&!touch_drag_threshold_exceeded((float)(x-applet->down_x),(float)(y-applet->down_y))) return;
     Point cursor=from_screen(applet,x,y);
-    Point unit=applet->captured==0?(Point){cos(applet->rotation),sin(applet->rotation)}:
-                                      (Point){-sin(applet->rotation),cos(applet->rotation)};
-    double projected=cursor.x*unit.x+cursor.y*unit.y;
-    double previous=applet->captured==0?applet->blue_length:applet->yellow_length;
-    double updated=clamp_leg(projected);
-    if (fabs(updated-previous)<1e-12) { applet->moved=true; return; }
-    if (applet->captured==0) applet->blue_length=updated; else applet->yellow_length=updated;
-    if (!recompute(applet)) {
-        if (applet->captured==0) applet->blue_length=previous; else applet->yellow_length=previous;
-        recompute(applet); return;
+    bool changed=false;
+    if (!i47_lua_drag(applet->lua,applet->captured,cursor.x,cursor.y,&changed)) {
+        remember_runtime_error(applet,"Lua drag failed");
+        return;
     }
-    applet->moved=true; ++applet->drag_updates;
+    applet->moved=true;
+    if (!changed) return;
+    if (!sync_from_lua(applet)) return;
+    ++applet->drag_updates;
+}
+
+const char *i47_applet_error(const I47Applet *applet) {
+    return applet&&applet->error[0]?applet->error:"";
 }

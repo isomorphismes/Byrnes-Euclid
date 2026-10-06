@@ -12,18 +12,21 @@ Tap the large CHECKS control at the upper right to toggle numerical checks.
 
 ## Book I.47 draft
 
-A second native draft now lives alongside III.1: [Book I, Proposition 47](docs/book1-proposition47.md), the Pythagorean theorem in Byrne's visual language. It has its own package identity and producer under [`android/i47`](android/i47/README.md), so both APKs can coexist on a phone.
+A second native draft lives alongside III.1: [Book I, Proposition 47](docs/book1-proposition47.md), the Pythagorean theorem in Byrne's visual language. It has its own package identity and producer under [`android/i47`](android/i47/README.md), so both APKs can coexist on a phone.
 
-Drag the blue or yellow endpoint to change the two legs while preserving the right angle. The red hypotenuse square, two side squares, proof lines, and numerical area checks recompute from the constrained geometry. The implementation is split into proposition geometry, interaction, rendering, host tests, and a thin NativeActivity adapter.
+I.47 now uses the intended C + Lua split. C owns exact geometry, Android plumbing, pointer capture, and raster primitives. The pinned Lua runtime executes [`lua/book1_prop47.lua`](lua/book1_prop47.lua), which owns proposition state, recomputation sequencing, constrained leg dragging, layout, captions, and Byrne colour roles. The same Lua source is used by host tests and packaged as an APK asset.
+
+Drag the blue or yellow endpoint to change the two legs while preserving the right angle. The red hypotenuse square, two side squares, proof lines, and numerical area checks recompute from the constrained geometry.
 
 ## Implementation contract
 
-- Android runtime/application code is C, not C++.
+- Android low-level runtime/application substrate is C, not C++.
+- Proposition-level behavior may use the pinned Lua submodule where it makes the code simpler and more reusable.
 - Build/package through the NDK/NativeActivity route recorded in `isomorphisms/android-NDK`; do not introduce Gradle as the application build system.
 - Keep Byrne's paper/black/red/blue/yellow visual language rather than replacing it with generic dynamic-geometry styling.
 - GeoGebra is an algorithm/reference oracle for geometry, not an application dependency or a reason to import its Java/Gradle architecture.
 - Idris type files are design/specification material only; they are not runtime APK dependencies.
-- Lua, when useful, comes from the pinned `third_party/lua` git submodule. Build scripts must not fetch or select a floating Lua version.
+- Lua comes from the pinned `third_party/lua` git submodule. Build scripts must not fetch or select a floating Lua version.
 
 ## Current sketches
 
