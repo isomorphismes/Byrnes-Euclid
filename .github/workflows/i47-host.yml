@@ -1,0 +1,50 @@
+name: Byrne I.47 C+Lua host qualification
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/i47-host.yml'
+      - 'code/i47_*'
+      - 'code/proposition47.*'
+      - 'lua/book1_prop47.lua'
+      - 'tests/i47_*'
+      - 'third_party/lua'
+  workflow_dispatch:
+
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Verify pinned Lua
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C third_party/lua rev-parse HEAD)" = 6e22fedb74cf0c9b6656e9fce8b7331db847c605
+          test -z "$(git -C third_party/lua status --porcelain --untracked-files=normal)"
+
+      - name: Build and run I.47 host tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          cc -std=c11 -O2 -DMAKE_LIB -I third_party/lua             -c third_party/lua/onelua.c -o out/lua-host.o
+          cc -std=c11 -O2 -Wall -Wextra -Werror -pedantic             -I code -I third_party/lua             code/proposition47.c code/i47_lua_bridge.c code/i47_applet.c             tests/i47_test.c out/lua-host.o -lm -o out/i47-test
+          ./out/i47-test lua/book1_prop47.lua | tee out/i47-tests.txt
+
+      - name: Generate Lua-driven preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -std=c11 -O2 -Wall -Wextra -Werror -pedantic             -I code -I third_party/lua             code/proposition47.c code/i47_lua_bridge.c code/i47_applet.c             code/i47_render.c tests/i47_render_preview.c out/lua-host.o             -lm -o out/i47-render-preview
+          ./out/i47-render-preview lua/book1_prop47.lua out/i47-preview.ppm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: byrne-i47-host-evidence
+          path: |
+            out/i47-tests.txt
+            out/i47-preview.ppm
