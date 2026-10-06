@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git -C third_party/lua rev-parse HEAD)" = 6e22fedb74cf0c9b6656e9fce8b7331db847c605
+          test "$(git -C third_party/lua rev-parse HEAD)" = dca7e57c16c524c8616144ed294fe598947a029f
           test -z "$(git -C third_party/lua status --porcelain --untracked-files=normal)"
 
       - name: Build and run I.47 host tests
