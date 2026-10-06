@@ -30,7 +30,7 @@ for required in ([compiler, "$llvm/llvm-strip", "$llvm/llvm-readelf", "$tools/aa
 }
 
 var lua_head = $(git -C "$lua" rev-parse HEAD)
-if (lua_head !== '6e22fedb74cf0c9b6656e9fce8b7331db847c605') {
+if (lua_head !== 'dca7e57c16c524c8616144ed294fe598947a029f') {
   echo "FAIL Lua submodule commit: $lua_head"; exit 2
 }
 var lua_dirty = $(git -C "$lua" status --porcelain --untracked-files=normal)
