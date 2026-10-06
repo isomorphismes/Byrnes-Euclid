@@ -11,6 +11,7 @@ Current Android target: Book III, Proposition 1 — find the centre of a given c
 - Keep Byrne's paper/black/red/blue/yellow visual language rather than replacing it with generic dynamic-geometry styling.
 - GeoGebra is an algorithm/reference oracle for geometry, not an application dependency or a reason to import its Java/Gradle architecture.
 - Idris type files are design/specification material only; they are not runtime APK dependencies.
+- Lua, when useful, comes from the pinned `third_party/lua` git submodule. Build scripts must not fetch or select a floating Lua version.
 
 ## Current sketches
 
