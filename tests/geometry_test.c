@@ -83,7 +83,12 @@ int main(void) {
         CHECK(applet.maximum_drift<BYRNE_RESIDUAL_TOLERANCE);
     }
     applet_cancel(&applet); CHECK(applet.captured==-1);
-    applet_down(&applet,1,20,1120); CHECK(applet.debug);
+    applet_down(&applet,1,20,1120); CHECK(!applet.debug);
+    applet_down(&applet,1,480,80); CHECK(applet.debug);
+    CHECK(applet.captured==-1);
+    applet_down(&applet,1,480,80); CHECK(!applet.debug);
+    applet_size(&applet,576,1040,160);
+    applet_down(&applet,1,480,80); CHECK(applet.debug);
     circle_destroy(applet.circle);
     printf("PASS %u fixed/generated chords; 720 drag positions; tolerance=%.1g radius; worst drift=%.17g radius\n",fixtures,BYRNE_RESIDUAL_TOLERANCE,worst_drift);
     puts("PASS midpoint, perpendicular, secant/tangent/miss, boundary, equal radii, degeneracy, pointer capture");

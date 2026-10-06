@@ -34,10 +34,17 @@ void applet_size(Applet *applet, int width, int height, int density) {
 void applet_cancel(Applet *applet) {
     applet->captured=-1; applet->pointer_id=-1; applet->moved=false;
 }
+AppletRect applet_checks_bounds(const Applet *applet) {
+    return (AppletRect){applet->width*.72,applet->height*.026,
+                         applet->width*.97,applet->height*.11};
+}
 void applet_down(Applet *applet, int pointer_id, double x, double y) {
     applet_cancel(applet);
     if (applet->blocked || applet->width<=0 || applet->height<=0) return;
-    if (y>applet->height*.93) { applet->debug=!applet->debug; return; }
+    AppletRect checks=applet_checks_bounds(applet);
+    if (x>=checks.left && x<=checks.right && y>=checks.top && y<=checks.bottom) {
+        applet->debug=!applet->debug; return;
+    }
     double best=fmax(touch_target_radius_pixels(applet->density), applet->width*.055);
     for (int index=0; index<2; ++index) {
         Point endpoint=applet_to_screen(applet, circle_boundary(applet->circle, applet->angles[index]));

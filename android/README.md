@@ -102,7 +102,7 @@ Android 14, with armeabi-v7a support. The app requests no permissions.
 Launch, drag each red endpoint around the blue circle, and cross a diameter.
 The yellow centre ring should stay still. Check the red halves remain equal,
 the right-angle mark stays square, and both blue intersection rings stay on
-the circle. Tap the bottom text to show numerical checks; residuals should
+the circle. Tap the outlined CHECKS control at the upper right to show numerical checks; residuals should
 stay below `1e-9`, and UPDATES should increase. Switch away/back and check the
 app redraws. Check selection does not jump when acquired near a handle.
 Two-finger input cancels the drag until all fingers lift; no pan/zoom in this
@@ -113,4 +113,7 @@ For an existing verified Termux rish entrypoint, the one-command equivalent
 launch is `rish -c 'am start -W -n org.isomorphismes.byrne.euclid.iii1/android.app.NativeActivity'`.
 `android/phone-check.grease` provides the optional identity/launch probe when
 an on-device Grease runtime already exists. It installs or builds nothing.
-Physical acceptance remains NOT_RUN until the user supplies that evidence.
+The user confirmed that version 0.1 renders and looks good on the MIRO A1,
+but reported that its bottom numerical toggle could not be tapped. Version
+0.1.1 moves the visible control and its full hit rectangle to the upper right.
+Updated-package touch acceptance remains NOT_RUN until exercised on the phone.

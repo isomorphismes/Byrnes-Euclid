@@ -8,7 +8,7 @@ The C implementation, live constrained chord interaction, paper/Byrne renderer,
 numerical acceptance tests and DEX-free ARMv7 package build are in place.
 See [native build and acceptance](android/README.md). Drag the red endpoints;
 the yellow centre ring is obtained by bisecting the black constructed diameter.
-Tap the bottom instruction to toggle numerical checks.
+Tap the large CHECKS control at the upper right to toggle numerical checks.
 
 ## Implementation contract
 

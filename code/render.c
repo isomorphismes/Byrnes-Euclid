@@ -83,6 +83,16 @@ void applet_render(const Applet *applet,uint32_t *pixels,int stride) {
     centre_text(canvas,(int)(canvas.height*.04),font,"BYRNE / EUCLID",BLACK);
     centre_text(canvas,(int)(canvas.height*.08),title,"BOOK III.1",BLACK);
     centre_text(canvas,(int)(canvas.height*.135),font,"FIND THE CENTRE OF A CIRCLE",BLACK);
+    AppletRect checks=applet_checks_bounds(applet);
+    Point top_left={checks.left,checks.top}, top_right={checks.right,checks.top};
+    Point bottom_left={checks.left,checks.bottom}, bottom_right={checks.right,checks.bottom};
+    stroke(canvas,top_left,top_right,1.5*unit,BLACK,false);
+    stroke(canvas,top_right,bottom_right,1.5*unit,BLACK,false);
+    stroke(canvas,bottom_right,bottom_left,1.5*unit,BLACK,false);
+    stroke(canvas,bottom_left,top_left,1.5*unit,BLACK,false);
+    const char *checks_caption=applet->debug ? "CHECKS ON" : "CHECKS OFF";
+    text(canvas,(int)((checks.left+checks.right-strlen(checks_caption)*font*6)*.5),
+         (int)((checks.top+checks.bottom-font*7)*.5),font,checks_caption,BLACK);
     Point circle_centre=applet_to_screen(applet,(Point){0,0});
     double radius=point_distance(circle_centre,applet_to_screen(applet,circle_boundary(applet->circle,0)));
     ring(canvas,circle_centre,radius,line_width,BLUE);
@@ -146,5 +156,4 @@ void applet_render(const Applet *applet,uint32_t *pixels,int stride) {
     } else if (construction->status!=GEOMETRY_OK) {
         centre_text(canvas,(int)(canvas.height*.88),font,geometry_status_name(construction->status),RED);
     }
-    centre_text(canvas,(int)(canvas.height*.952),font,applet->debug ? "TAP HERE TO HIDE CHECKS" : "TAP HERE FOR NUMERICAL CHECKS",BLACK);
 }

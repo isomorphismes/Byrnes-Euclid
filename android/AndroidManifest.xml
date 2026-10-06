@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.isomorphismes.byrne.euclid.iii1"
-    android:versionCode="1" android:versionName="0.1-native">
+    android:versionCode="2" android:versionName="0.1.1-native">
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="34" />
     <application android:label="Byrne · Circle Centre" android:hasCode="false"
         android:allowBackup="false" android:extractNativeLibs="true"
