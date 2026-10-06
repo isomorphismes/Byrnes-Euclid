@@ -10,6 +10,12 @@ See [native build and acceptance](android/README.md). Drag the red endpoints;
 the yellow centre ring is obtained by bisecting the black constructed diameter.
 Tap the large CHECKS control at the upper right to toggle numerical checks.
 
+## Book I.47 draft
+
+A second native draft now lives alongside III.1: [Book I, Proposition 47](docs/book1-proposition47.md), the Pythagorean theorem in Byrne's visual language. It has its own package identity and producer under [`android/i47`](android/i47/README.md), so both APKs can coexist on a phone.
+
+Drag the blue or yellow endpoint to change the two legs while preserving the right angle. The red hypotenuse square, two side squares, proof lines, and numerical area checks recompute from the constrained geometry. The implementation is split into proposition geometry, interaction, rendering, host tests, and a thin NativeActivity adapter.
+
 ## Implementation contract
 
 - Android runtime/application code is C, not C++.
@@ -22,6 +28,7 @@ Tap the large CHECKS control at the upper right to toggle numerical checks.
 ## Current sketches
 
 - [Euclid III.1 type sketch](types/Byrne/BookIII/Proposition1.idr) — construction-state model that deliberately gives proposition code no direct way to read a circle's stored centre.
+- [Euclid I.47 type sketch](types/Byrne/BookI/Proposition47.idr) — right-triangle/area-state model for the Pythagorean draft.
 - [Touch interaction](docs/touch-interaction.md) — engine-neutral interaction contract adapted from the working Wegert phone UI.
 - [Touch contract](code/touch_contract.h) — small C vocabulary for capture, hit radius, and drag threshold.
 - [Wegert mirror](mirrors/wegert/PROVENANCE.md) — pinned local copies of the NDK touch, JNI, and direct-DEX examples so a fork does not need to reconstruct the Android path from another repository.
